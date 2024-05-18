@@ -28,12 +28,6 @@ class NamedExpressionInvalidTest(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, "invalid syntax"):
             exec(code, {}, {})
 
-    def test_named_expression_invalid_06(self):
-        code = """((a, b) := (1, 2))"""
-
-        with self.assertRaisesRegex(SyntaxError, "cannot use assignment expressions with tuple"):
-            exec(code, {}, {})
-
     def test_named_expression_invalid_07(self):
         code = """def spam(a = b := 42): pass"""
 
@@ -762,6 +756,59 @@ spam()"""
 
         Foo().f()
         self.assertEqual(_Foo__x1, 2)
+
+    def test_case_expression_hello_world(self):
+        if ["hello", name] := "hello world".split():
+            self.assertEqual(name, "world")
+        else:
+            self.fail()
+
+    def test_case_expression_tuple(self):
+        if (a, b) := (1, 2):
+            self.assertEqual(a, 1)
+            self.assertEqual(b, 2)
+        else:
+            self.fail()
+
+    def test_case_expression_or(self):
+        if 1 | 2 | 3 as n := 2:
+            self.assertEqual(n, 2)
+        else:
+            self.fail()
+
+    def test_case_expression_menu(self):
+        menu = [
+            {
+                "name": "Spam",
+                "price": 5,
+                "vegan": False
+            },
+            {
+                "name": "Eggs",
+                "price": 6,
+                "vegan": False
+            },
+            {
+                "name": "Broccoli",
+                "price": 3,
+                "vegan": True
+            },
+        ]
+        total = sum(
+            price
+            for food in menu
+            if ({"vegan": True, "price": price} := food)
+        )
+        self.assertEqual(total, 3)
+
+    def test_case_expression_date(self):
+        import re
+        if [_, year, month, day] := re.match(r"(\d+)/(\d+)/(\d+)", "2024/05/18"):
+            self.assertEqual(year, "2024")
+            self.assertEqual(month, "05")
+            self.assertEqual(day, "18")
+        else:
+            self.fail()
 
 if __name__ == "__main__":
     unittest.main()

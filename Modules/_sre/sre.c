@@ -2294,6 +2294,38 @@ match_getitem(MatchObject* self, PyObject* name)
     return match_getslice(self, name, Py_None);
 }
 
+static Py_ssize_t
+match_length(MatchObject *self)
+{
+    return self->groups;
+}
+
+// Bad Implementation just to enable unpacking.
+static PyObject*
+match_iter(MatchObject *self)
+{
+    PyObject* result;
+    Py_ssize_t index;
+
+    result = PyTuple_New(self->groups);
+    if (!result)
+        return NULL;
+
+    for (index = 0; index < self->groups; index++) {
+        PyObject* item;
+        item = match_getslice_by_index(self, index, Py_None);
+        if (!item) {
+            Py_DECREF(result);
+            return NULL;
+        }
+        PyTuple_SET_ITEM(result, index, item);
+    }
+
+    PyObject *it = PyTuple_Type.tp_iter(result);
+    Py_DECREF(result);
+    return it;
+}
+
 /*[clinic input]
 _sre.SRE_Match.groups
 
@@ -3118,6 +3150,8 @@ static PyType_Slot match_slots[] = {
      * __getitem__.
      */
     {Py_mp_subscript, match_getitem},
+    {Py_mp_length, match_length},
+    {Py_tp_iter, match_iter},
 
     {0, NULL},
 };
@@ -3126,7 +3160,7 @@ static PyType_Spec match_spec = {
     .name = "re.Match",
     .basicsize = sizeof(MatchObject),
     .itemsize = sizeof(Py_ssize_t),
-    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE |
+    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_SEQUENCE | Py_TPFLAGS_IMMUTABLETYPE |
               Py_TPFLAGS_DISALLOW_INSTANTIATION | Py_TPFLAGS_HAVE_GC),
     .slots = match_slots,
 };

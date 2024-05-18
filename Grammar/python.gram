@@ -700,6 +700,7 @@ assignment_expression[expr_ty]:
     | a=NAME ':=' ~ b=expression {
         CHECK_VERSION(expr_ty, 8, "Assignment expressions are",
         _PyAST_NamedExpr(CHECK(expr_ty, _PyPegen_set_expr_context(p, a, Store)), b, EXTRA)) }
+    | pattern=pattern ':=' ~ subject=expression { _PyAST_CaseExpr(pattern, subject, EXTRA) }
 
 named_expression[expr_ty]:
     | assignment_expression

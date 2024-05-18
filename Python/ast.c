@@ -388,6 +388,10 @@ validate_expr(struct validator *state, expr_ty exp, expr_context_ty ctx)
         }
         ret = validate_expr(state, exp->v.NamedExpr.value, Load);
         break;
+    case CaseExpr_kind:
+        ret = validate_pattern(state, exp->v.CaseExpr.pattern, /*star_ok=*/0) &&
+            validate_expr(state, exp->v.CaseExpr.subject, Load);
+        break;
     /* This last case doesn't have any checking. */
     case Name_kind:
         ret = 1;

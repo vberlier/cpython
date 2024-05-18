@@ -2129,6 +2129,13 @@ symtable_visit_expr(struct symtable *st, expr_ty e)
         if(!symtable_handle_namedexpr(st, e))
             VISIT_QUIT(st, 0);
         break;
+    case CaseExpr_kind:
+        if (!symtable_raise_if_annotation_block(st, "case expression", e)) {
+            VISIT_QUIT(st, 0);
+        }
+        VISIT(st, expr, e->v.CaseExpr.subject);
+        VISIT(st, pattern, e->v.CaseExpr.pattern);
+        break;
     case BoolOp_kind:
         VISIT_SEQ(st, expr, e->v.BoolOp.values);
         break;

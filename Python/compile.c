@@ -330,6 +330,7 @@ static int compiler_augassign(struct compiler *, stmt_ty);
 static int compiler_annassign(struct compiler *, stmt_ty);
 static int compiler_subscript(struct compiler *, expr_ty);
 static int compiler_slice(struct compiler *, expr_ty);
+static int compiler_caseexpr(struct compiler *, expr_ty);
 
 static bool are_all_items_const(asdl_expr_seq *, Py_ssize_t, Py_ssize_t);
 
@@ -6078,6 +6079,8 @@ compiler_visit_expr1(struct compiler *c, expr_ty e)
         ADDOP_I(c, loc, COPY, 1);
         VISIT(c, expr, e->v.NamedExpr.target);
         break;
+    case CaseExpr_kind:
+        return compiler_caseexpr(c, e);
     case BoolOp_kind:
         return compiler_boolop(c, e);
     case BinOp_kind:
@@ -7411,6 +7414,69 @@ compiler_match(struct compiler *c, stmt_ty s)
 
 #undef WILDCARD_CHECK
 #undef WILDCARD_STAR_CHECK
+
+static int
+compiler_caseexpr_inner(struct compiler *c, expr_ty e, pattern_context* pc)
+{
+    VISIT(c, expr, e->v.CaseExpr.subject);
+
+    // Mostly a copy-paste of the loop body found in `compiler_match_inner`, until the
+    // call to `emit_and_reset_fail_pop` at the very end.
+    NEW_JUMP_TARGET_LABEL(c, end);
+    location loc = LOC(e->v.CaseExpr.pattern);
+
+    // Always copy the subject, as it's consumed when matching the pattern and we want
+    // the case expression to leave it on the stack if the pattern matches.
+    ADDOP_I(c, loc, COPY, 1);
+
+    pc->stores = PyList_New(0);
+    if (pc->stores == NULL) {
+        return ERROR;
+    }
+
+    pc->allow_irrefutable = 1;
+    pc->fail_pop = NULL;
+    pc->fail_pop_size = 0;
+    pc->on_top = 0;
+    // NOTE: Can't use returning macros here (they'll leak pc->stores)!
+    if (compiler_pattern(c, e->v.CaseExpr.pattern, pc) < 0) {
+        Py_DECREF(pc->stores);
+        return ERROR;
+    }
+    assert(!pc->on_top);
+
+    // It's a match! Store all of the captured names (they're on the stack).
+    Py_ssize_t nstores = PyList_GET_SIZE(pc->stores);
+    for (Py_ssize_t n = 0; n < nstores; n++) {
+        PyObject *name = PyList_GET_ITEM(pc->stores, n);
+        if (compiler_nameop(c, loc, name, Store) < 0) {
+            Py_DECREF(pc->stores);
+            return ERROR;
+        }
+    }
+    Py_DECREF(pc->stores);
+    // NOTE: Returning macros are safe again.
+
+    ADDOP_JUMP(c, NO_LOCATION, JUMP_NO_INTERRUPT, end);
+    RETURN_IF_ERROR(emit_and_reset_fail_pop(c, loc, pc));
+
+    // When matching the pattern fails, replace the result with `None`.
+    ADDOP(c, loc, POP_TOP);
+    ADDOP_LOAD_CONST(c, loc, Py_None);
+
+    USE_LABEL(c, end);
+    return SUCCESS;
+}
+
+static int
+compiler_caseexpr(struct compiler *c, expr_ty e)
+{
+    pattern_context pc;
+    pc.fail_pop = NULL;
+    int result = compiler_caseexpr_inner(c, e, &pc);
+    PyMem_Free(pc.fail_pop);
+    return result;
+}
 
 static PyObject *
 consts_dict_keys_inorder(PyObject *dict)

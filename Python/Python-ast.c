@@ -59,6 +59,7 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->BoolOp_type);
     Py_CLEAR(state->Break_type);
     Py_CLEAR(state->Call_type);
+    Py_CLEAR(state->CaseExpr_type);
     Py_CLEAR(state->ClassDef_type);
     Py_CLEAR(state->Compare_type);
     Py_CLEAR(state->Constant_type);
@@ -557,6 +558,10 @@ static const char * const BoolOp_fields[]={
 static const char * const NamedExpr_fields[]={
     "target",
     "value",
+};
+static const char * const CaseExpr_fields[]={
+    "pattern",
+    "subject",
 };
 static const char * const BinOp_fields[]={
     "left",
@@ -2538,6 +2543,41 @@ add_ast_annotations(struct ast_state *state)
         return 0;
     }
     Py_DECREF(NamedExpr_annotations);
+    PyObject *CaseExpr_annotations = PyDict_New();
+    if (!CaseExpr_annotations) return 0;
+    {
+        PyObject *type = state->pattern_type;
+        Py_INCREF(type);
+        cond = PyDict_SetItemString(CaseExpr_annotations, "pattern", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(CaseExpr_annotations);
+            return 0;
+        }
+    }
+    {
+        PyObject *type = state->expr_type;
+        Py_INCREF(type);
+        cond = PyDict_SetItemString(CaseExpr_annotations, "subject", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(CaseExpr_annotations);
+            return 0;
+        }
+    }
+    cond = PyObject_SetAttrString(state->CaseExpr_type, "_field_types",
+                                  CaseExpr_annotations) == 0;
+    if (!cond) {
+        Py_DECREF(CaseExpr_annotations);
+        return 0;
+    }
+    cond = PyObject_SetAttrString(state->CaseExpr_type, "__annotations__",
+                                  CaseExpr_annotations) == 0;
+    if (!cond) {
+        Py_DECREF(CaseExpr_annotations);
+        return 0;
+    }
+    Py_DECREF(CaseExpr_annotations);
     PyObject *BinOp_annotations = PyDict_New();
     if (!BinOp_annotations) return 0;
     {
@@ -5698,6 +5738,7 @@ init_types(struct ast_state *state)
     state->expr_type = make_type(state, "expr", state->AST_type, NULL, 0,
         "expr = BoolOp(boolop op, expr* values)\n"
         "     | NamedExpr(expr target, expr value)\n"
+        "     | CaseExpr(pattern pattern, expr subject)\n"
         "     | BinOp(expr left, operator op, expr right)\n"
         "     | UnaryOp(unaryop op, expr operand)\n"
         "     | Lambda(arguments args, expr body)\n"
@@ -5739,6 +5780,10 @@ init_types(struct ast_state *state)
                                       NamedExpr_fields, 2,
         "NamedExpr(expr target, expr value)");
     if (!state->NamedExpr_type) return -1;
+    state->CaseExpr_type = make_type(state, "CaseExpr", state->expr_type,
+                                     CaseExpr_fields, 2,
+        "CaseExpr(pattern pattern, expr subject)");
+    if (!state->CaseExpr_type) return -1;
     state->BinOp_type = make_type(state, "BinOp", state->expr_type,
                                   BinOp_fields, 3,
         "BinOp(expr left, operator op, expr right)");
@@ -7073,6 +7118,34 @@ _PyAST_NamedExpr(expr_ty target, expr_ty value, int lineno, int col_offset, int
     p->kind = NamedExpr_kind;
     p->v.NamedExpr.target = target;
     p->v.NamedExpr.value = value;
+    p->lineno = lineno;
+    p->col_offset = col_offset;
+    p->end_lineno = end_lineno;
+    p->end_col_offset = end_col_offset;
+    return p;
+}
+
+expr_ty
+_PyAST_CaseExpr(pattern_ty pattern, expr_ty subject, int lineno, int
+                col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+{
+    expr_ty p;
+    if (!pattern) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'pattern' is required for CaseExpr");
+        return NULL;
+    }
+    if (!subject) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'subject' is required for CaseExpr");
+        return NULL;
+    }
+    p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = CaseExpr_kind;
+    p->v.CaseExpr.pattern = pattern;
+    p->v.CaseExpr.subject = subject;
     p->lineno = lineno;
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
@@ -8868,6 +8941,21 @@ ast2obj_expr(struct ast_state *state, struct validator *vstate, void* _o)
         value = ast2obj_expr(state, vstate, o->v.NamedExpr.value);
         if (!value) goto failed;
         if (PyObject_SetAttr(result, state->value, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
+    case CaseExpr_kind:
+        tp = (PyTypeObject *)state->CaseExpr_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_pattern(state, vstate, o->v.CaseExpr.pattern);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->pattern, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_expr(state, vstate, o->v.CaseExpr.subject);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->subject, value) == -1)
             goto failed;
         Py_DECREF(value);
         break;
@@ -13245,6 +13333,54 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
         if (*out == NULL) goto failed;
         return 0;
     }
+    tp = state->CaseExpr_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return -1;
+    }
+    if (isinstance) {
+        pattern_ty pattern;
+        expr_ty subject;
+
+        if (PyObject_GetOptionalAttr(obj, state->pattern, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"pattern\" missing from CaseExpr");
+            return -1;
+        }
+        else {
+            int res;
+            if (_Py_EnterRecursiveCall(" while traversing 'CaseExpr' node")) {
+                goto failed;
+            }
+            res = obj2ast_pattern(state, tmp, &pattern, arena);
+            _Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (PyObject_GetOptionalAttr(obj, state->subject, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"subject\" missing from CaseExpr");
+            return -1;
+        }
+        else {
+            int res;
+            if (_Py_EnterRecursiveCall(" while traversing 'CaseExpr' node")) {
+                goto failed;
+            }
+            res = obj2ast_expr(state, tmp, &subject, arena);
+            _Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_CaseExpr(pattern, subject, lineno, col_offset,
+                               end_lineno, end_col_offset, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
     tp = state->BinOp_type;
     isinstance = PyObject_IsInstance(obj, tp);
     if (isinstance == -1) {
@@ -17176,6 +17312,9 @@ astmodule_exec(PyObject *m)
         return -1;
     }
     if (PyModule_AddObjectRef(m, "NamedExpr", state->NamedExpr_type) < 0) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "CaseExpr", state->CaseExpr_type) < 0) {
         return -1;
     }
     if (PyModule_AddObjectRef(m, "BinOp", state->BinOp_type) < 0) {

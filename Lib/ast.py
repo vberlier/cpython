@@ -896,6 +896,13 @@ class _Unparser(NodeVisitor):
             self.write(" := ")
             self.traverse(node.value)
 
+    def visit_CaseExpr(self, node):
+        with self.require_parens(_Precedence.NAMED_EXPR, node):
+            self.set_precedence(_Precedence.ATOM, node.pattern, node.subject)
+            self.traverse(node.pattern)
+            self.write(" := ")
+            self.traverse(node.subject)
+
     def visit_Import(self, node):
         self.fill("import ")
         self.interleave(lambda: self.write(", "), self.traverse, node.names)

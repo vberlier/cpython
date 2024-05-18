@@ -11650,7 +11650,7 @@ star_named_expression_rule(Parser *p)
     return _res;
 }
 
-// assignment_expression: NAME ':=' ~ expression
+// assignment_expression: NAME ':=' ~ expression | pattern ':=' ~ expression
 static expr_ty
 assignment_expression_rule(Parser *p)
 {
@@ -11713,6 +11713,52 @@ assignment_expression_rule(Parser *p)
         p->mark = _mark;
         D(fprintf(stderr, "%*c%s assignment_expression[%d-%d]: %s failed!\n", p->level, ' ',
                   p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "NAME ':=' ~ expression"));
+        if (_cut_var) {
+            p->level--;
+            return NULL;
+        }
+    }
+    { // pattern ':=' ~ expression
+        if (p->error_indicator) {
+            p->level--;
+            return NULL;
+        }
+        D(fprintf(stderr, "%*c> assignment_expression[%d-%d]: %s\n", p->level, ' ', _mark, p->mark, "pattern ':=' ~ expression"));
+        int _cut_var = 0;
+        Token * _literal;
+        pattern_ty pattern;
+        expr_ty subject;
+        if (
+            (pattern = pattern_rule(p))  // pattern
+            &&
+            (_literal = _PyPegen_expect_token(p, 53))  // token=':='
+            &&
+            (_cut_var = 1)
+            &&
+            (subject = expression_rule(p))  // expression
+        )
+        {
+            D(fprintf(stderr, "%*c+ assignment_expression[%d-%d]: %s succeeded!\n", p->level, ' ', _mark, p->mark, "pattern ':=' ~ expression"));
+            Token *_token = _PyPegen_get_last_nonnwhitespace_token(p);
+            if (_token == NULL) {
+                p->level--;
+                return NULL;
+            }
+            int _end_lineno = _token->end_lineno;
+            UNUSED(_end_lineno); // Only used by EXTRA macro
+            int _end_col_offset = _token->end_col_offset;
+            UNUSED(_end_col_offset); // Only used by EXTRA macro
+            _res = _PyAST_CaseExpr ( pattern , subject , EXTRA );
+            if (_res == NULL && PyErr_Occurred()) {
+                p->error_indicator = 1;
+                p->level--;
+                return NULL;
+            }
+            goto done;
+        }
+        p->mark = _mark;
+        D(fprintf(stderr, "%*c%s assignment_expression[%d-%d]: %s failed!\n", p->level, ' ',
+                  p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "pattern ':=' ~ expression"));
         if (_cut_var) {
             p->level--;
             return NULL;
