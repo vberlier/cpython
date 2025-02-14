@@ -810,5 +810,13 @@ spam()"""
         else:
             self.fail()
 
+"""
+to fix:
+test.test_inspect.test_inspect test_ast test_builtin
+test_cmd_line_script test_compileall test_os test_peepholer
+test_pyclbr test_re test_regrtest test_syntax test_unittest
+test_unparse
+"""
+
 if __name__ == "__main__":
     unittest.main()
