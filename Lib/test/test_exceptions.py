@@ -328,7 +328,6 @@ class ExceptionTests(unittest.TestCase):
         check('foo(x for x in range(10), 100)', 1, 5)
         check('for 1 in []: pass', 1, 5)
         check('(yield i) = 2', 1, 2)
-        check('def f(*):\n  pass', 1, 7)
 
     @unittest.skipIf(INT_MAX >= sys.maxsize, "Downcasting to int is safe for col_offset")
     @support.requires_resource('cpu')

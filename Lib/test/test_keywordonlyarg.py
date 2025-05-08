@@ -41,11 +41,9 @@ class KeywordOnlyArgTestCase(unittest.TestCase):
         self.assertRaises(SyntaxError, shouldRaiseSyntaxError, codestr)
 
     def testSyntaxErrorForFunctionDefinition(self):
-        self.assertRaisesSyntaxError("def f(p, *):\n  pass\n")
         self.assertRaisesSyntaxError("def f(p1, *, p1=100):\n  pass\n")
         self.assertRaisesSyntaxError("def f(p1, *k1, k1=100):\n  pass\n")
         self.assertRaisesSyntaxError("def f(p1, *, k1, k1=100):\n  pass\n")
-        self.assertRaisesSyntaxError("def f(p1, *, **k1):\n  pass\n")
         self.assertRaisesSyntaxError("def f(p1, *, k1, **k1):\n  pass\n")
         self.assertRaisesSyntaxError("def f(p1, *, None, **k1):\n  pass\n")
         self.assertRaisesSyntaxError("def f(p, *, (k1, k2), **kw):\n  pass\n")

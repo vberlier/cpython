@@ -419,7 +419,7 @@ SyntaxError: invalid syntax
 >>> def foo(/,a,b=,c):
 ...    pass
 Traceback (most recent call last):
-SyntaxError: at least one argument must precede /
+SyntaxError: expected default value expression
 
 >>> def foo(a,/,/,b,c):
 ...    pass
@@ -535,10 +535,6 @@ SyntaxError: expected default value expression
 ...    pass
 Traceback (most recent call last):
 SyntaxError: expected default value expression
-
->>> lambda /,a,b,c: None
-Traceback (most recent call last):
-SyntaxError: at least one argument must precede /
 
 >>> lambda a,/,/,b,c: None
 Traceback (most recent call last):
@@ -2175,10 +2171,6 @@ Corner-cases that used to fail to raise the correct error:
     >>> def f(**kwargs:(lambda __debug__:0)): pass
     Traceback (most recent call last):
     SyntaxError: cannot assign to __debug__
-
-    >>> with (lambda *:0): pass
-    Traceback (most recent call last):
-    SyntaxError: named arguments must follow bare *
 
 Corner-cases that used to crash:
 

@@ -565,10 +565,6 @@ class GrammarTests(unittest.TestCase):
         pos2key2dict(1,2,k2=100,tokwarg1=100,tokwarg2=200)
         pos2key2dict(1,2,tokwarg1=100,tokwarg2=200, k2=100)
 
-        self.assertRaises(SyntaxError, eval, "def f(*): pass")
-        self.assertRaises(SyntaxError, eval, "def f(*,): pass")
-        self.assertRaises(SyntaxError, eval, "def f(*, **kwds): pass")
-
         # keyword arguments after *arglist
         def f(*args, **kwargs):
             return args, kwargs
@@ -670,6 +666,39 @@ class GrammarTests(unittest.TestCase):
         def f(a, *args, b, **kwds,): pass
         def f(a, *, b, **kwds,): pass
 
+        # check that inert positionalonly separator is valid
+        def ip1(/, a = 1):
+            pass
+
+        ip1()
+        ip1(1)
+
+        def ip(/, a):
+            pass
+
+        ip(1)
+
+        def ip3(/):
+            pass
+
+        ip3()
+
+        # check that inert keyworkonly separator is valid
+        def ik1(*):
+            pass
+
+        ik1()
+
+        def ik2(*,):
+            pass
+
+        ik2()
+
+        def ik3(*, **kwds):
+            pass
+
+        ik3()
+
     def test_lambdef(self):
         ### lambdef: 'lambda' [varargslist] ':' test
         l1 = lambda : 0
@@ -704,6 +733,27 @@ class GrammarTests(unittest.TestCase):
         l22 = lambda *, b, **kwds,: 0
         l23 = lambda a, *args, b, **kwds,: 0
         l24 = lambda a, *, b, **kwds,: 0
+
+        # check that inert positionalonly separator is valid
+        ip1 = lambda /, a = 1: None
+        ip1()
+        ip1(1)
+
+        ip2 = lambda /, a: None
+        ip2(1)
+
+        ip3 = lambda /: None
+        ip3()
+
+        # check that inert keyworkonly separator is valid
+        ik1 = lambda *: None
+        ik1()
+
+        ik2 = lambda *,:  None
+        ik2()
+
+        ik3 = lambda *, **kwds: None
+        ik3()
 
 
     ### stmt: simple_stmt | compound_stmt
